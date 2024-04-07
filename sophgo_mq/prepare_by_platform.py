@@ -263,31 +263,13 @@ def get_qconfig_by_platform(quant_dict:Dict,extra_qparams: Dict):
     #     else:
     #         qconfig["object_type"] = object_type
             
-    module_name = extra_qparams.get('module_name', None)
-    if module_name:
-        if "module_name" not in qconfig:
-            qconfig["module_name"] = {}
-        for type_name,type_data in module_name.items():
-            mode=module_name.get(type_name,{}).get("mode")
-            bit=module_name.get(type_name,{}).get("bit")
-            if mode=="activation":
-                afq=module_name.get(type_name,{}).get("afakequantize")
-                aob=module_name.get(type_name,{}).get("aobserver")
-                qconfig["module_name"][type_name]=createQConfigForSophgo_activation(bit_num = bit, a_fakequantize = afq, a_observer = aob)
-            elif mode=="weight":
-                wfq=module_name.get(type_name,{}).get("wfakequantize")
-                wob=module_name.get(type_name,{}).get("wobserver")
-                qconfig["module_name"][type_name]=createQConfigForSophgo_weight(bit_num = bit, w_fakequantize = wfq, w_observer = wob)
-            else:
-                raise ValueError(f'无效的模式: {mode}。模式应该是 "activation" 或 "weight"。')
-
     # Find INT4 op and set the config:
     int4_cfg = extra_qparams.get('int4_op', None)
     if int4_cfg:
         if "module_name" not in qconfig:
             qconfig["module_name"] = {}
-        w_fakequantize = 'LearnableFakeQuantize'
-        a_fakequantize = 'LearnableFakeQuantize'
+        w_fakequantize = 'GPTQFakeQuantize'
+        a_fakequantize = 'GPTQFakeQuantize'
         w_observer = 'MinMaxObserver'
         a_observer = 'EMAMinMaxObserver'
         w_qscheme = {
@@ -306,7 +288,7 @@ def get_qconfig_by_platform(quant_dict:Dict,extra_qparams: Dict):
                                         a_fakequantize=a_fakequantize,
                                         w_qscheme=w_qscheme, a_qscheme=a_qscheme)
         for name in int4_cfg:
-            print('insert INT4 FakeQuantize::', name)
+            print('Insert INT4 FakeQuantize::', name)
             qconfig['module_name'][name] = int4_qconfig
 
     # Find INT8 op and set the config:
@@ -334,7 +316,7 @@ def get_qconfig_by_platform(quant_dict:Dict,extra_qparams: Dict):
                                         a_fakequantize=a_fakequantize,
                                         w_qscheme=w_qscheme, a_qscheme=a_qscheme)
         for name in int8_cfg:
-            print('insert INT8 FakeQuantize::', name)
+            print('Insert INT8 FakeQuantize::', name)
             qconfig['module_name'][name] = int8_qconfig
 
     # Find F16 op and set the config
@@ -361,8 +343,50 @@ def get_qconfig_by_platform(quant_dict:Dict,extra_qparams: Dict):
         f16_qconfig = createQConfig(w_fakequantize=w_fakequantize, a_fakequantize=a_fakequantize, 
                                     w_qscheme=w_qscheme, a_qscheme=a_qscheme)    
         for name in f16_cfg:
-            print('insert F16 FakeQuantize::', name)
+            print('Insert F16 FakeQuantize::', name)
             qconfig["module_name"][name] = f16_qconfig
+
+    # Insert FakeQuantize activation based on module name
+    int4_module_act_config = extra_qparams.get('int4_module_activation', None)
+    if int4_module_act_config:
+        if "int4_module_activation" not in qconfig:
+            qconfig["int4_module_activation"] = {}
+        a_fakequantize = 'GPTQFakeQuantize'
+        a_observer = 'EMAMinMaxObserver'
+        module_activation_config = createQConfigForSophgo_activation(bit_num=4, a_fakequantize=a_fakequantize, a_observer=a_observer)
+        for name in int4_module_act_config:
+            print('Insert INT4 module activation::', name)
+            qconfig["module_name"][name] = module_activation_config
+
+    # Insert FakeQuantize weight based on module name
+    int4_module_weight_config = extra_qparams.get('int4_module_weight', None)
+    if int4_module_weight_config:
+        if "int4_module_weight" not in qconfig:
+            qconfig["int4_module_weight"] = {}
+        w_fakequantize = 'GPTQFakeQuantize'
+        w_observer = 'MinMaxObserver'
+        module_weight_config = createQConfigForSophgo_weight(bit_num=4, w_fakequantize=w_fakequantize, w_observer=w_observer)
+        for name in int4_module_weight_config:
+            print('Insert INT4 module weight::', name)
+            qconfig["module_name"][name] = module_weight_config    
+
+    module_name = extra_qparams.get('module_name', None)
+    if module_name:
+        if "module_name" not in qconfig:
+            qconfig["module_name"] = {}
+        for type_name,type_data in module_name.items():
+            mode=module_name.get(type_name,{}).get("mode")
+            bit=module_name.get(type_name,{}).get("bit")
+            if mode=="activation":
+                afq=module_name.get(type_name,{}).get("afakequantize")
+                aob=module_name.get(type_name,{}).get("aobserver")
+                qconfig["module_name"][type_name]=createQConfigForSophgo_activation(bit_num = bit, a_fakequantize = afq, a_observer = aob)
+            elif mode=="weight":
+                wfq=module_name.get(type_name,{}).get("wfakequantize")
+                wob=module_name.get(type_name,{}).get("wobserver")
+                qconfig["module_name"][type_name]=createQConfigForSophgo_weight(bit_num = bit, w_fakequantize = wfq, w_observer = wob)
+            else:
+                raise ValueError(f'无效的模式: {mode}。模式应该是 "activation" 或 "weight"。')
     return qconfig
 
 def chipparams(chip,extra_qparams,FakeQuantize):
